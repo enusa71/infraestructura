@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Laboratorio Docker Compose</title>
+  <style>
+    body { font-family: Arial; margin: 40px; background: #f0f0f0; }
+    .container { background: white; padding: 20px; border-radius: 5px; }
+    h1 { color: #333; }
+    .status { color: green; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🐳 Docker Compose Funciona!</h1>
+    <p class="status">✅ Nginx está corriendo desde docker-compose.yml</p>
+    <hr>
+    <h2>Archivo de configuración:</h2>
+    <pre>
+docker-compose.yml define:
+- Servicio: web (nginx)
+- Imagen: nginx:latest
+- Puerto: 8080:80
+- Red: laboratorio-net
+- Reinicio automático
+- Health check
+    </pre>
+  </div>
+</body>
+</html>

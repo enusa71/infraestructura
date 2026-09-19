@@ -1,4 +1,5 @@
 services:
+  # Servicio Nginx
   web:
     image: nginx:latest
     container_name: laboratorio-nginx
@@ -15,6 +16,28 @@ services:
       timeout: 10s
       retries: 3
 
+  # Servicio PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: laboratorio-postgres
+    environment:
+      POSTGRES_USER: custodia
+      POSTGRES_PASSWORD: custodia123
+      POSTGRES_DB: custodia_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - laboratorio-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U custodia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Servicio Portainer
   portainer:
     image: portainer/portainer-ce:latest
     container_name: laboratorio-portainer
@@ -38,4 +61,5 @@ networks:
     driver: bridge
 
 volumes:
+  postgres-data:
   portainer-data:

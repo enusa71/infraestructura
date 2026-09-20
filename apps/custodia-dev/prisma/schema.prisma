@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Herramienta {
+  id        String   @id @default(cuid())
+  nombre    String   @unique
+  descripcion String?
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     CustodiaItem[]
+
+  @@index([activa])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  table     String
+  action    String
+  recordId  String
+  changes   Json
+  userId    String?
+  userEmail String?
+  createdAt DateTime @default(now())
+
+  @@index([table, recordId])
+  @@index([createdAt])
+}
+
+model UsuarioRol {
+  id        String   @id @default(cuid())
+  userEmail String   @unique
+  rol       String   @default("custodia_usuario")
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userEmail])
+}
+
+model Permiso {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  modulo      String
+  accion      String
+  descripcion String?
+  activa      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermisos RolePermiso[]
+
+  @@index([modulo])
+  @@index([accion])
+}
+
+model RolePermiso {
+  id        String   @id @default(cuid())
+  rol       String
+  permiso   Permiso  @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+  permisoId String
+  createdAt DateTime @default(now())
+
+  @@unique([rol, permisoId])
+  @@index([rol])
+  @@index([permisoId])
+}
+
+model Contratista {
+  id        String   @id @default(cuid())
+  cedula    String   @unique
+  nombre    String
+  empresa   String?
+  telefono  String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  custodias Custodia[]
+
+  @@index([cedula])
+}
+
+model Custodia {
+  id              String   @id @default(cuid())
+  numeroConsecutivo String  @unique
+  contratista     Contratista @relation(fields: [contratistaId], references: [id])
+  contratistaId   String
+
+  fechaEntrada    DateTime
+  fechaSalida     DateTime?
+  estado          String   @default("ACTIVA")
+
+  placa           String?
+  puerta          String
+  zonaFranca      String
+  firmaIngreso    String?
+
+  ingreso         CustodiaIngreso?
+  salidas         CustodiaSalida[]
+  items           CustodiaItem[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([contratistaId])
+  @@index([estado])
+  @@index([fechaEntrada])
+}
+
+model CustodiaItem {
+  id          String   @id @default(cuid())
+  custodia    Custodia @relation(fields: [custodiaId], references: [id], onDelete: Cascade)
+  custodiaId  String
+
+  herramienta    Herramienta? @relation(fields: [herramientaId], references: [id])
+  herramientaId  String?
+
+  salidaItems CustodiaSalidaItem[]
+
+  cantidad    Int
+  fotoUrl     String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([custodiaId])
+  @@index([herramientaId])
+}
+
+model CustodiaIngreso {
+  id          String   @id @default(cuid())
+  custodia    Custodia @relation(fields: [custodiaId], references: [id], onDelete: Cascade)
+  custodiaId  String   @unique
+
+  fotoContratista    String?
+  fotoGrupoHerramientas String?
+
+  auxiliarNombre     String?
+  auxiliarCedula     String?
+  firmaAuxiliarBlobUrl String?
+  firmaAuxiliarDatos   String?
+  firmaContratistaBlobUrl String?
+  firmaContratistaDatos   String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([custodiaId])
+}
+
+model CustodiaSalida {
+  id          String   @id @default(cuid())
+  custodia    Custodia @relation(fields: [custodiaId], references: [id], onDelete: Cascade)
+  custodiaId  String
+
+  fechaSalida    DateTime @default(now())
+  esParcial      Boolean  @default(false)
+
+  items       CustodiaSalidaItem[]
+
+  fotoSalida     String?
+  observaciones  String?
+
+  cedulaRetira   String?
+  nombreRetira   String?
+  auxiliarCedula String?
+  auxiliarNombre String?
+  empresaRetira  String?
+
+  firmaAuxiliarBlobUrl String?
+  firmaAuxiliarDatos   String?
+  firmaRetiraBlobUrl   String?
+  firmaRetiraDatos     String?
+
+  pdfGenerado    String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([custodiaId])
+  @@index([fechaSalida])
+}
+
+model CustodiaSalidaItem {
+  id          String   @id @default(cuid())
+  salida      CustodiaSalida @relation(fields: [salidaId], references: [id], onDelete: Cascade)
+  salidaId    String
+
+  item        CustodiaItem @relation(fields: [itemId], references: [id])
+  itemId      String
+
+  cantidadSalida Int
+
+  createdAt   DateTime @default(now())
+
+  @@index([salidaId])
+  @@index([itemId])
+}
+
+model AuxiliarSeguridad {
+  id                String   @id @default(cuid())
+  userEmail         String   @unique
+  nombre            String   @default("")
+  cedula            String   @default("")
+  firmaBase64       String   @default("")
+  firmaCapturedAt   DateTime?
+  firmaVersion      Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  firmaVersiones    AuxiliarSeguidadFirmaVersion[]
+
+  @@index([userEmail])
+}
+
+model AuxiliarSeguidadFirmaVersion {
+  id                String   @id @default(cuid())
+  auxiliar          AuxiliarSeguridad @relation(fields: [auxiliarId], references: [id], onDelete: Cascade)
+  auxiliarId        String
+
+  versionNum        Int
+  firmaBase64       String
+  nombre            String   @default("")
+  cedula            String   @default("")
+  capturadoEn       DateTime  @default(now())
+  createdAt         DateTime @default(now())
+
+  @@index([auxiliarId])
+  @@index([versionNum])
+  @@unique([auxiliarId, versionNum])
+}
+
+model ConfiguracionConsecutivo {
+  id                String   @id @default(cuid())
+  zona              String   @unique
+  proximoNumero     Int      @default(1)
+  actualizadoPor    String?
+  ultimaActualizacion DateTime @default(now()) @updatedAt
+  createdAt         DateTime @default(now())
+
+  @@index([zona])
+}

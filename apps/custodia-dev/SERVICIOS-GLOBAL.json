@@ -1,0 +1,185 @@
+{
+  "timestamp": "2026-09-12T10:00:00Z",
+  "version": "1.0.0",
+  "ambiente": "desarrollo",
+  "region": "Zona Franca Barranquilla",
+  "descripcion": "Inventario centralizado de servicios - Custodia de Herramientas",
+
+  "config_monitoreo": {
+    "intervalo_verificacion_ms": 5000,
+    "timeout_ms": 3000,
+    "reintentos": 3,
+    "alertas_habilitadas": false
+  },
+
+  "servicios_compartidos": {
+    "postgresql": {
+      "id": "postgresql",
+      "nombre": "Base de Datos PostgreSQL",
+      "descripcion": "Base de datos compartida para custodia_db",
+      "host": "localhost",
+      "puerto": 5432,
+      "tipo": "database",
+      "provider": "postgresql",
+      "usuario": "custodia",
+      "base_datos": "custodia_db",
+      "healthCheckUrl": "tcp://localhost:5432",
+      "estado": "unknown",
+      "dependencias": [],
+      "critico": true
+    },
+
+    "gotenberg": {
+      "id": "gotenberg",
+      "nombre": "Generador de PDFs",
+      "descripcion": "Servicio Gotenberg para generación de comprobantes",
+      "host": "localhost",
+      "puerto": 3001,
+      "tipo": "service",
+      "provider": "gotenberg",
+      "healthCheckUrl": "http://localhost:3001/health",
+      "estado": "unknown",
+      "dependencias": [],
+      "critico": false
+    },
+
+    "r2": {
+      "id": "r2",
+      "nombre": "Cloudflare R2",
+      "descripcion": "Almacenamiento de fotos en la nube",
+      "tipo": "storage",
+      "provider": "cloudflare-r2",
+      "bucket": "zfb-files",
+      "region": "auto",
+      "healthCheckUrl": "https://r2.zfb.com/health",
+      "estado": "unknown",
+      "dependencias": [],
+      "critico": false,
+      "habilitado": false
+    }
+  },
+
+  "aplicaciones": [
+    {
+      "id": "custodia",
+      "nombre": "Custodia de Herramientas",
+      "version": "0.1.0",
+      "descripcion": "Sistema PWA de entrada/salida de herramientas",
+      "tipo": "frontend-backend",
+      "framework": "Next.js 15 + React 19",
+      "lenguaje": "TypeScript",
+      "host": "localhost",
+      "puerto": 3002,
+      "puerto_produccion": 3010,
+      "url_desarrollo": "http://localhost:3002",
+      "url_produccion": "http://10.1.9.250:3010",
+      "path_repo": ".",
+      "bd_principal": "custodia_db",
+      "healthCheckUrl": "http://localhost:3002/api/health",
+      "estado": "unknown",
+      "ultima_verificacion": null,
+      "dependencias": [
+        "postgresql",
+        "gotenberg"
+      ],
+      "paginas": [
+        "/",
+        "/entrada",
+        "/salida",
+        "/historial",
+        "/reportes",
+        "/auditoria",
+        "/admin/herramientas",
+        "/admin/usuarios",
+        "/login",
+        "/offline"
+      ],
+      "api_endpoints": [
+        "GET /api/health",
+        "POST /api/fotos",
+        "POST /api/historial/buscar",
+        "GET /api/reportes/estadisticas",
+        "GET /api/auditoria/logs",
+        "GET /api/custodia/[numero]",
+        "GET /api/usuario/rol",
+        "POST /api/contratista/buscar",
+        "* /api/auth/[...nextauth]"
+      ],
+      "roles": [
+        "custodia_admin",
+        "custodia_usuario",
+        "custodia_lector"
+      ],
+      "features": [
+        "PWA",
+        "Offline-first",
+        "Firma digital",
+        "Captura de cámara",
+        "Compresión de fotos",
+        "Auditoría",
+        "Roles y permisos",
+        "Reportes"
+      ],
+      "estado_general": "desarrollo",
+      "ultima_revision": "2026-09-12",
+      "contacto": "efrainnunez@gmail.com"
+    }
+  ],
+
+  "futuras_apps": [
+    {
+      "id": "mantenimiento",
+      "nombre": "Gestión de Mantenimiento",
+      "version": "0.0.0",
+      "descripcion": "Sistema de mantenimiento preventivo y correctivo",
+      "framework": "Next.js 15 + React 19",
+      "puerto": 3011,
+      "bd_principal": "mantenimiento_db",
+      "estado": "planificacion",
+      "dependencias": [
+        "postgresql",
+        "keycloak"
+      ]
+    },
+    {
+      "id": "reportes",
+      "nombre": "Portal de Reportes",
+      "version": "0.0.0",
+      "descripcion": "Dashboard centralizado de reportes y analytics",
+      "framework": "Next.js 15 + React 19",
+      "puerto": 3012,
+      "bd_principal": "reportes_db",
+      "estado": "planificacion",
+      "dependencias": [
+        "postgresql",
+        "keycloak"
+      ]
+    }
+  ],
+
+  "notas": {
+    "keycloak": {
+      "estado": "NO IMPLEMENTADO",
+      "razon": "Deshabilitado en auth.ts - se implementará en FASE 2",
+      "realm": "zfb",
+      "fecha_prevista_implementacion": "2026-10-01"
+    },
+    "migraciones": {
+      "estado": "PENDIENTE",
+      "descripcion": "Las migraciones se encuentran en desarrollo (.next generada por Prisma)"
+    },
+    "storage": {
+      "desarrollo": "/opt/custodia/fotos (en servidor Linux) o local en desarrollo",
+      "produccion": "Cloudflare R2 (pendiente configuración)"
+    }
+  },
+
+  "comandos_utiles": {
+    "dev": "npm run dev",
+    "build": "npm run build",
+    "db_migrate": "npm run db:migrate:dev",
+    "db_seed": "npm run db:seed",
+    "db_studio": "npm run db:studio",
+    "health_check": "curl http://localhost:3002/api/health"
+  }
+}

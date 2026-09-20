@@ -1,0 +1,119 @@
+'use client';
+import { ProtegidoPorRol } from '@/components/ProtegidoPorRol';
+import Link from "next/link";
+import { signOut, useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+
+export default function DashboardPage() {
+  const { data: session } = useSession();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // TODO: Re-enable auth check later
+    // For now, allow access without auth
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">Cargando...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Custodia de Herramientas</h1>
+            <p className="text-gray-600 text-sm">Zona Franca Barranquilla</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm text-gray-600">{session?.user?.email}</p>
+              <button
+                onClick={() => signOut()}
+                className="text-red-600 hover:text-red-800 text-sm font-medium"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Card: Entrada - Solo admin y usuario */}
+          <ProtegidoPorRol rolesPermitidos={['custodia_admin', 'custodia_usuario']}>
+            <Link href="/entrada">
+              <div className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow cursor-pointer">
+                <div className="text-4xl mb-4">📥</div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Entrada de Herramientas</h2>
+                <p className="text-gray-600 mb-4">Registra la entrada de herramientas y equipos</p>
+                <div className="text-blue-600 font-semibold">Comenzar →</div>
+              </div>
+            </Link>
+          </ProtegidoPorRol>
+
+          {/* Card: Salida - Solo admin y usuario */}
+          <ProtegidoPorRol rolesPermitidos={['custodia_admin', 'custodia_usuario']}>
+            <Link href="/salida">
+              <div className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow cursor-pointer">
+                <div className="text-4xl mb-4">📤</div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Salida de Herramientas</h2>
+                <p className="text-gray-600 mb-4">Registra la salida de herramientas y equipos</p>
+                <div className="text-blue-600 font-semibold">Comenzar →</div>
+              </div>
+            </Link>
+          </ProtegidoPorRol>
+
+          {/* Card: Historial */}
+          <Link href="/historial">
+            <div className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow cursor-pointer">
+              <div className="text-4xl mb-4">📋</div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Historial de Custodias</h2>
+              <p className="text-gray-600 mb-4">Busca y revisa custodias anteriores</p>
+              <div className="text-blue-600 font-semibold">Consultar →</div>
+            </div>
+          </Link>
+
+          {/* Card: Reportes */}
+          <Link href="/reportes">
+            <div className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow cursor-pointer">
+              <div className="text-4xl mb-4">📊</div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Reportes</h2>
+              <p className="text-gray-600 mb-4">Análisis y estadísticas de custodias</p>
+              <div className="text-blue-600 font-semibold">Ver Reportes →</div>
+            </div>
+          </Link>
+
+          {/* Card: Auditoría - Solo admin */}
+          <ProtegidoPorRol rolesPermitidos={['custodia_admin']}>
+            <Link href="/auditoria">
+              <div className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow cursor-pointer">
+                <div className="text-4xl mb-4">🔍</div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Auditoría</h2>
+                <p className="text-gray-600 mb-4">Registro de todas las operaciones del sistema</p>
+                <div className="text-blue-600 font-semibold">Ver Auditoría →</div>
+              </div>
+            </Link>
+          </ProtegidoPorRol>
+        </div>
+
+        {/* Info Box */}
+        <div className="mt-12 bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h3 className="font-semibold text-gray-900 mb-2">ℹ️ Información</h3>
+          <p className="text-gray-700">
+            Sistema de custodia de herramientas y equipos para contratistas en Zona Franca.
+            Todos los datos se registran digitalmente con fotos y firmas digitales.
+          </p>
+        </div>
+      </main>
+    </div>
+  );
+}

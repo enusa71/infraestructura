@@ -1,0 +1,11 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "custom_instructions": "Eres un experto en Next.js, Prisma, React y TypeScript. Trabajamos en app-custodia-herramientas para Zona Franca Barranquilla. Sigue el mismo patrón que app-mantenimiento (hermana mayor). Confirma antes de cambios en BD o arquitectura.",
+  "permissions": {
+    "read_files": true,
+    "edit_files": true,
+    "write_files": true,
+    "execute_bash": true,
+    "execute_powershell": true
+  }
+}

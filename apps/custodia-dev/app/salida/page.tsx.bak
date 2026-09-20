@@ -1,0 +1,404 @@
+'use client';
+
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { buscarCustodia, crearSalida } from '../custodia/actions';
+
+export default function SalidaPage() {
+  const { status } = useSession();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const [step, setStep] = useState<"busqueda" | "validacion" | "confirmacion">("busqueda");
+  const [filtro, setFiltro] = useState("");
+  const [tipoFiltro, setTipoFiltro] = useState<'numero' | 'cedula' | 'nombre'>('numero');
+  const [buscando, setBuscando] = useState(false);
+  const [error, setError] = useState("");
+  const [custodia, setCustodia] = useState<any>(null);
+  const [herramientasSalida, setHerramientasSalida] = useState<{ id: string; herramientaNombre: string; cantidad: number; cantidadSalida: number }[]>([]);
+  const [guardandoSalida, setGuardandoSalida] = useState(false);
+  const [custodias, setCustodias] = useState<any[]>([]);
+
+  useEffect(() => {
+    const init = async () => {
+      await cargarActivas();
+      setMounted(true);
+    };
+    init();
+  }, []);
+
+  const cargarActivas = async () => {
+    try {
+      const resActiva = await fetch('/api/historial/buscar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filtro: '', tipoFiltro: 'numero', estado: 'ACTIVA' }),
+      });
+      const dataActiva = await resActiva.json();
+
+      const resParcial = await fetch('/api/historial/buscar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filtro: '', tipoFiltro: 'numero', estado: 'PARCIAL' }),
+      });
+      const dataParcial = await resParcial.json();
+
+      if (dataActiva.success && dataParcial.success) {
+        let todas = [...(dataActiva.custodias || []), ...(dataParcial.custodias || [])];
+
+        todas = todas.filter(custodia => {
+          const cantidadSalidaTotal = (custodia.salidas || []).reduce((total: number, salida: any) => {
+            return total + ((salida.items || []).reduce((sum: number, item: any) => sum + item.cantidadSalida, 0));
+          }, 0);
+          const cantidadIngresada = (custodia.items || []).reduce((total: number, item: any) => total + item.cantidad, 0);
+          return cantidadSalidaTotal < cantidadIngresada;
+        });
+
+        console.log('📋 Custodias con pendientes:', todas.length);
+        setCustodias(todas);
+        return todas;
+      }
+    } catch (err) {
+      console.error('Error cargando custodias:', err);
+    }
+    return [];
+  };
+
+  const handleBuscar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setBuscando(true);
+
+    try {
+      // Si es búsqueda por cédula, filtrar custodias activas/parciales
+      if (tipoFiltro === 'cedula') {
+        const cedulaFiltradas = custodias.filter(c => c.contratista.cedula === filtro);
+        if (cedulaFiltradas.length > 0) {
+          // Mostrar opción de seleccionar cual custodia si hay múltiples
+          if (cedulaFiltradas.length === 1) {
+            const result = await buscarCustodia(cedulaFiltradas[0].id);
+            if (result.success && result.custodia) {
+              setCustodia(result.custodia);
+              const salidas = (result.custodia.items || [])
+                .map((item: any) => {
+                  const cantidadSalidaTotal = (result.custodia.salidas || []).reduce((total: number, salida: any) => {
+                    const salidaDelItem = (salida.items || []).find((si: any) => si.itemId === item.id);
+                    return total + (salidaDelItem?.cantidadSalida || 0);
+                  }, 0);
+                  const cantidadPendiente = item.cantidad - cantidadSalidaTotal;
+                  return {
+                    id: item.id,
+                    herramientaNombre: item.herramienta?.nombre || item.descripcion || 'Sin nombre',
+                    cantidad: item.cantidad,
+                    cantidadSalidaTotal,
+                    cantidadSalida: Math.max(0, cantidadPendiente),
+                  };
+                })
+                .filter((item: any) => item.cantidadSalida > 0);
+              setHerramientasSalida(salidas);
+              setStep("validacion");
+            }
+          } else {
+            // Si hay múltiples, filtrar custodias y mostrar
+            setCustodias(cedulaFiltradas);
+            setError("Múltiples custodias encontradas. Selecciona una de las tarjetas arriba.");
+          }
+        } else {
+          setError("No hay custodias activas/pendientes para esa cédula");
+        }
+      } else {
+        // Búsqueda por número o nombre (comportamiento anterior)
+        const res = await fetch('/api/historial/buscar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filtro, tipoFiltro, estado: '' }),
+        });
+
+        const data = await res.json();
+        if (data.success && data.custodias.length > 0) {
+          const custodia = data.custodias[0];
+          setCustodia(custodia);
+          const salidas = (custodia.items || [])
+            .map((item: any) => {
+              const cantidadSalidaTotal = (custodia.salidas || []).reduce((total: number, salida: any) => {
+                const salidaDelItem = (salida.items || []).find((si: any) => si.itemId === item.id);
+                return total + (salidaDelItem?.cantidadSalida || 0);
+              }, 0);
+              const cantidadPendiente = item.cantidad - cantidadSalidaTotal;
+              return {
+                id: item.id,
+                herramientaNombre: item.herramienta?.nombre || item.descripcion || 'Sin nombre',
+                cantidad: item.cantidad,
+                cantidadSalidaTotal,
+                cantidadSalida: Math.max(0, cantidadPendiente),
+              };
+            })
+            .filter((item: any) => item.cantidadSalida > 0);
+          setHerramientasSalida(salidas);
+          setStep("validacion");
+        } else {
+          setError("Custodia no encontrada");
+        }
+      }
+    } catch (err) {
+      setError("Error buscando custodia");
+    }
+
+    setBuscando(false);
+  };
+
+  const handleCantidadSalida = (index: number, cantidad: number) => {
+    const nuevas = [...herramientasSalida];
+    nuevas[index].cantidadSalida = cantidad;
+    setHerramientasSalida(nuevas);
+  };
+
+  const handleValidacionNext = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGuardandoSalida(true);
+
+    const result = await crearSalida(
+      custodia.id,
+      herramientasSalida.map((item) => ({ itemId: item.id, cantidadSalida: item.cantidadSalida }))
+    );
+
+    setGuardandoSalida(false);
+
+    if (result.success) {
+      setStep("confirmacion");
+    } else {
+      setError(result.error || "Error registrando salida");
+    }
+  };
+
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow">
+        <div className="max-w-4xl mx-auto px-3 md:px-4 py-4 flex justify-between items-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">📤 Salida de Herramientas</h1>
+          <Link href="/" className="text-blue-600 hover:text-blue-800 text-sm md:text-base">
+            ← Volver
+          </Link>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="max-w-4xl mx-auto px-3 md:px-4 py-6 md:py-8">
+        {/* Step 1: Búsqueda */}
+        {step === "busqueda" && (
+          <>
+            {/* Formulario de búsqueda - ARRIBA */}
+            <div className="bg-white rounded-lg shadow-lg p-4 md:p-8 mb-6 md:mb-8">
+              <h2 className="text-lg md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">Buscar Custodia para Salida</h2>
+              {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                  {error}
+                </div>
+              )}
+              <form onSubmit={handleBuscar} className="space-y-4 md:space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-3">
+                <div>
+                  <label className="block text-base md:text-sm font-medium text-gray-700 mb-2 md:mb-1">
+                    Buscar por:
+                  </label>
+                  <select
+                    value={tipoFiltro}
+                    onChange={(e) => setTipoFiltro(e.target.value as any)}
+                    className="w-full px-4 py-3 md:py-2 md:px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base md:text-sm text-black"
+                  >
+                    <option value="numero">Número Custodia</option>
+                    <option value="cedula">Cédula Contratista</option>
+                    <option value="nombre">Nombre Contratista</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-base md:text-sm font-medium text-gray-700 mb-2 md:mb-1">
+                    Valor búsqueda
+                  </label>
+                  <input
+                    type="text"
+                    value={filtro}
+                    onChange={(e) => setFiltro(e.target.value)}
+                    placeholder={
+                      tipoFiltro === 'numero'
+                        ? 'Ej: 062408001'
+                        : tipoFiltro === 'cedula'
+                        ? 'Ej: 73015491'
+                        : 'Ej: Efrain Nunez'
+                    }
+                    required
+                    className="w-full px-4 py-3 md:py-2 md:px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base md:text-sm text-black"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    disabled={buscando || !filtro}
+                    className="w-full px-4 py-3 md:py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 text-base md:text-sm"
+                  >
+                    {buscando ? "Buscando..." : "🔍 Buscar"}
+                  </button>
+                </div>
+              </div>
+            </form>
+            </div>
+
+            {/* Custodias Activas - ABAJO */}
+            {mounted && custodias.length > 0 && (
+              <div className="bg-white rounded-lg shadow-lg p-4 md:p-8">
+                <h2 className="text-lg md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">📋 Custodias Activas (Pendientes de Salida)</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                  {custodias.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={async () => {
+                        const result = await buscarCustodia(c.id);
+                        if (result.success && result.custodia) {
+                          setCustodia(result.custodia);
+                          const salidas = (result.custodia.items || [])
+                            .map((item: any) => {
+                              const cantidadSalidaTotal = (result.custodia.salidas || []).reduce((total: number, salida: any) => {
+                                const salidaDelItem = (salida.items || []).find((si: any) => si.itemId === item.id);
+                                return total + (salidaDelItem?.cantidadSalida || 0);
+                              }, 0);
+                              const cantidadPendiente = item.cantidad - cantidadSalidaTotal;
+                              return {
+                                id: item.id,
+                                herramientaNombre: item.herramienta?.nombre || item.descripcion || 'Sin nombre',
+                                cantidad: item.cantidad,
+                                cantidadSalidaTotal,
+                                cantidadSalida: Math.max(0, cantidadPendiente),
+                              };
+                            })
+                            .filter((item: any) => item.cantidadSalida > 0);
+                          setHerramientasSalida(salidas);
+                          setStep("validacion");
+                        }
+                      }}
+                      className="text-left p-4 md:p-3 border-2 border-yellow-300 rounded-lg hover:bg-yellow-50 hover:border-yellow-500 transition active:scale-95"
+                    >
+                      <p className="font-bold text-base md:text-sm text-black">#{c.numeroConsecutivo}</p>
+                      <p className="text-base md:text-sm text-gray-700 mt-1">{c.contratista.nombre}</p>
+                      <p className="text-sm md:text-xs text-gray-500">Cédula: {c.contratista.cedula}</p>
+                      <p className="text-sm md:text-xs text-gray-500 mt-2 md:mt-1">
+                        {
+                          (() => {
+                            const cantidadSalidaTotal = (c.salidas || []).reduce((total: number, salida: any) => {
+                              return total + ((salida.items || []).reduce((sum: number, item: any) => sum + item.cantidadSalida, 0));
+                            }, 0);
+                            const cantidadIngresada = (c.items || []).reduce((total: number, item: any) => total + item.cantidad, 0);
+                            const pendientes = cantidadIngresada - cantidadSalidaTotal;
+                            return `${pendientes} herramienta${pendientes !== 1 ? 's' : ''} pendiente${pendientes !== 1 ? 's' : ''}`;
+                          })()
+                        }
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Step 2: Validación */}
+        {step === "validacion" && custodia && (
+          <div className="bg-white rounded-lg shadow-lg p-4 md:p-8">
+            <h2 className="text-lg md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">Validar Salida</h2>
+            <div className="mb-6 md:mb-8 p-4 md:p-5 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+              <p className="text-base md:text-sm text-gray-700">
+                <strong>Custodia:</strong> {custodia.numeroConsecutivo}
+              </p>
+              <p className="text-base md:text-sm text-gray-700">
+                <strong>Contratista:</strong> {custodia.contratista.nombre} ({custodia.contratista.cedula})
+              </p>
+              <p className="text-base md:text-sm text-gray-700">
+                <strong>Fecha Entrada:</strong> {new Date(custodia.fechaEntrada).toLocaleString()}
+              </p>
+              <p className="text-base md:text-sm text-gray-700">
+                <strong>Estado:</strong> {custodia.estado}
+              </p>
+            </div>
+
+            <form onSubmit={handleValidacionNext}>
+              <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-4 md:mb-5">
+                Herramientas a Salir
+              </h3>
+              <div className="space-y-4 md:space-y-3 mb-6 md:mb-8">
+                {herramientasSalida.length === 0 ? (
+                  <p className="text-gray-500 text-center py-6 md:py-4">No hay herramientas en esta custodia</p>
+                ) : (
+                  herramientasSalida.map((item, index) => (
+                    <div key={item.id} className="border border-gray-200 rounded-lg p-4 md:p-3">
+                      <p className="font-medium text-base md:text-sm text-gray-900">{item.herramientaNombre}</p>
+                      <p className="text-base md:text-sm text-gray-600 mb-4 md:mb-3 mt-1">Ingresadas: {item.cantidad}</p>
+                      <div>
+                        <label className="block text-base md:text-sm font-medium text-gray-700 mb-2 md:mb-1">
+                          ¿Cuántas salen? (*)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max={item.cantidad}
+                          value={item.cantidadSalida}
+                          onChange={(e) =>
+                            handleCantidadSalida(index, parseInt(e.target.value) || 0)
+                          }
+                          className="w-full px-4 py-3 md:py-2 md:px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base md:text-sm text-black"
+                        />
+                        {item.cantidadSalida < item.cantidad && (
+                          <p className="text-base md:text-sm text-orange-600 mt-2 md:mt-2">
+                            ⚠️ Salida parcial: Quedan {item.cantidad - item.cantidadSalida}{" "}
+                            {item.herramientaNombre.toLowerCase()}(s) en custodia
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="flex gap-3 md:gap-4">
+                <button
+                  type="submit"
+                  disabled={guardandoSalida}
+                  className="flex-1 px-4 py-4 md:py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-400 text-base md:text-sm"
+                >
+                  {guardandoSalida ? "Guardando..." : "✅ Confirmar Salida"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("busqueda")}
+                  disabled={guardandoSalida}
+                  className="flex-1 px-4 py-4 md:py-3 bg-gray-300 text-gray-800 font-semibold rounded-lg hover:bg-gray-400 disabled:opacity-50 text-base md:text-sm"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Step 3: Confirmación */}
+        {step === "confirmacion" && (
+          <div className="bg-white rounded-lg shadow-lg p-6 md:p-8 text-center">
+            <div className="text-8xl md:text-6xl mb-4 md:mb-6">✅</div>
+            <h2 className="text-2xl md:text-3xl font-bold text-green-600 mb-3 md:mb-4">Salida Registrada</h2>
+            <p className="text-base md:text-lg text-gray-700 mb-8 md:mb-6">La salida ha sido registrada exitosamente.</p>
+            <Link
+              href="/"
+              className="inline-block bg-blue-600 text-white px-8 py-4 md:py-3 rounded-lg font-semibold hover:bg-blue-700 text-base md:text-sm"
+            >
+              Volver al Inicio
+            </Link>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

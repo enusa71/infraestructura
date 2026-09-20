@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Herramienta {
+  id        String   @id @default(cuid())
+  nombre    String   @unique
+  descripcion String?
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     CustodiaItem[]
+
+  @@index([activa])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  table     String
+  action    String
+  recordId  String
+  changes   Json
+  userId    String?
+  userEmail String?
+  createdAt DateTime @default(now())
+
+  @@index([table, recordId])
+  @@index([createdAt])
+}
+
+model UsuarioRol {
+  id        String   @id @default(cuid())
+  userEmail String   @unique
+  rol       String   @default("custodia_usuario")
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userEmail])
+}
+
+model Contratista {
+  id        String   @id @default(cuid())
+  cedula    String   @unique
+  nombre    String
+  empresa   String?
+  telefono  String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  custodias Custodia[]
+
+  @@index([cedula])
+}
+
+model Custodia {
+  id              String   @id @default(cuid())
+  numeroConsecutivo String  @unique
+  contratista     Contratista @relation(fields: [contratistaId], references: [id])
+  contratistaId   String
+
+  fechaEntrada    DateTime
+  fechaSalida     DateTime?
+  estado          String   @default("ACTIVA")
+
+  ingreso         CustodiaIngreso?
+  salidas         CustodiaSalida[]
+  items           CustodiaItem[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([contratistaId])
+  @@index([estado])
+  @@index([fechaEntrada])
+}
+
+model CustodiaItem {
+  id          String   @id @default(cuid())
+  custodia    Custodia @relation(fields: [custodiaId], references: [id], onDelete: Cascade)
+  custodiaId  String
+
+  herramienta    Herramienta? @relation(fields: [herramientaId], references: [id])
+  herramientaId  String?
+
+  salidaItems CustodiaSalidaItem[]
+
+  cantidad    Int
+  fotoUrl     String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([custodiaId])
+  @@index([herramientaId])
+}
+
+model CustodiaIngreso {
+  id          String   @id @default(cuid())
+  custodia    Custodia @relation(fields: [custodiaId], references: [id], onDelete: Cascade)
+  custodiaId  String   @unique
+
+  fotoContratista    String?
+  fotoGrupoHerramientas String?
+  firmaContratista   String?
+  firmaGuardia       String?
+
+  guardiaNombre     String?
+  guardiaCedula     String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([custodiaId])
+}
+
+model CustodiaSalida {
+  id          String   @id @default(cuid())
+  custodia    Custodia @relation(fields: [custodiaId], references: [id], onDelete: Cascade)
+  custodiaId  String
+
+  fechaSalida    DateTime @default(now())
+  esParcial      Boolean  @default(false)
+
+  items       CustodiaSalidaItem[]
+
+  fotoSalida     String?
+  firmaContratista String?
+  firmaGuardia   String?
+
+  guardiaNombre  String?
+  guardiaCedula  String?
+
+  observaciones  String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([custodiaId])
+  @@index([fechaSalida])
+}
+
+model CustodiaSalidaItem {
+  id          String   @id @default(cuid())
+  salida      CustodiaSalida @relation(fields: [salidaId], references: [id], onDelete: Cascade)
+  salidaId    String
+
+  item        CustodiaItem @relation(fields: [itemId], references: [id])
+  itemId      String
+
+  cantidadSalida Int
+
+  createdAt   DateTime @default(now())
+
+  @@index([salidaId])
+  @@index([itemId])
+}

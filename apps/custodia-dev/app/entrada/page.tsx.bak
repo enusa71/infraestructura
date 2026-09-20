@@ -1,0 +1,384 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { buscarHerramientas, crearHerramienta } from '../admin/herramientas/actions';
+import { crearCustodia } from '../custodia/actions';
+
+interface Herramienta {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+}
+
+interface Item {
+  herramienta: Herramienta;
+  cantidad: number;
+}
+
+export default function EntradaPage() {
+  const [paso, setPaso] = useState(1);
+  const [cedula, setCedula] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [empresa, setEmpresa] = useState('');
+  const [items, setItems] = useState<Item[]>([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [resultados, setResultados] = useState<Herramienta[]>([]);
+  const [cantidad, setCantidad] = useState(1);
+  const [creando, setCreando] = useState(false);
+  const [nuevaNombre, setNuevaNombre] = useState('');
+  const [nuevaDesc, setNuevaDesc] = useState('');
+  const [error, setError] = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  const handleBuscar = async (q: string) => {
+    setBusqueda(q);
+    setError('');
+    if (q.length < 2) {
+      setResultados([]);
+      setCreando(false);
+      return;
+    }
+    try {
+      const result = await buscarHerramientas(q);
+      if (result.success) {
+        setResultados(result.herramientas || []);
+        setCreando(false);
+      }
+    } catch (err) {
+      setError('Error buscando herramientas');
+      setResultados([]);
+    }
+  };
+
+  const agregarItem = (herramienta: Herramienta) => {
+    const exists = items.find((i) => i.herramienta.id === herramienta.id);
+    if (exists) {
+      setItems(items.map((i) =>
+        i.herramienta.id === herramienta.id ? { ...i, cantidad: i.cantidad + cantidad } : i
+      ));
+    } else {
+      setItems([...items, { herramienta, cantidad }]);
+    }
+    limpiarBusqueda();
+  };
+
+  const limpiarBusqueda = () => {
+    setBusqueda('');
+    setResultados([]);
+    setCreando(false);
+    setCantidad(1);
+    setNuevaNombre('');
+    setNuevaDesc('');
+  };
+
+  const handleCrearRapido = async () => {
+    if (!nuevaNombre.trim()) return;
+    try {
+      const result = await crearHerramienta(nuevaNombre, nuevaDesc);
+      if (result.success && result.herramienta) {
+        agregarItem(result.herramienta);
+      }
+    } catch (err) {
+      setError('Error creando herramienta');
+    }
+  };
+
+  const eliminarItem = (id: string) => {
+    setItems(items.filter((i) => i.herramienta.id !== id));
+  };
+
+  const cargarContratista = async (cedulaBuscada: string) => {
+    if (!cedulaBuscada || cedulaBuscada.length < 5) return;
+    try {
+      const res = await fetch(`/api/contratista/buscar?cedula=${cedulaBuscada}`);
+      const data = await res.json();
+      if (data.success && data.contratista) {
+        setNombre(data.contratista.nombre);
+        setEmpresa(data.contratista.empresa || '');
+      }
+    } catch (err) {
+      console.error('Error cargando contratista:', err);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (paso === 1) {
+      if (!cedula || !nombre) {
+        setError('Cédula y nombre son requeridos');
+        return;
+      }
+      setPaso(2);
+    } else {
+      if (items.length === 0) {
+        setError('Debes agregar al menos una herramienta');
+        return;
+      }
+      setGuardando(true);
+      try {
+        const result = await crearCustodia(
+          cedula,
+          nombre,
+          items.map((i) => ({ herramientaId: i.herramienta.id, cantidad: i.cantidad })),
+          empresa
+        );
+
+        if (result.success) {
+          alert(`✓ Entrada #${result.custodia.numeroConsecutivo} registrada\nContratista: ${nombre}\nHerramientas: ${items.length}`);
+          // Reset completo
+          setCedula('');
+          setNombre('');
+          setEmpresa('');
+          setItems([]);
+          setPaso(1);
+        } else {
+          setError('Error guardando entrada');
+        }
+      } finally {
+        setGuardando(false);
+      }
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-3 md:p-4">
+      <div className="max-w-2xl mx-auto">
+        <Link href="/" className="text-blue-600 hover:text-blue-800 text-sm mb-4 inline-block">
+          ← Volver al inicio
+        </Link>
+
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-6 gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-black">Entrada de Herramientas</h1>
+              <p className="text-sm md:text-base text-gray-600">Paso {paso} de 2</p>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            {paso === 1 ? (
+              <div className="space-y-5 md:space-y-4">
+                <h2 className="text-lg md:text-xl font-semibold mb-4 text-black">Datos del Contratista</h2>
+                <div>
+                  <label className="block text-base md:text-sm font-medium text-black mb-2 md:mb-1">Cédula</label>
+                  <input
+                    type="text"
+                    value={cedula}
+                    onChange={(e) => setCedula(e.target.value)}
+                    onBlur={(e) => cargarContratista(e.target.value)}
+                    placeholder="1098765432"
+                    autoComplete="off"
+                    className="w-full px-4 py-3 md:py-2 md:px-3 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base md:text-sm text-black"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-base md:text-sm font-medium text-black mb-2 md:mb-1">Nombre</label>
+                  <input
+                    type="text"
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    placeholder="Juan Pérez García"
+                    autoComplete="off"
+                    className="w-full px-4 py-3 md:py-2 md:px-3 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base md:text-sm text-black"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-base md:text-sm font-medium text-black mb-2 md:mb-1">
+                    Empresa (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={empresa}
+                    onChange={(e) => setEmpresa(e.target.value)}
+                    placeholder="Construcciones Pérez SAS"
+                    autoComplete="off"
+                    className="w-full px-4 py-3 md:py-2 md:px-3 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base md:text-sm text-black"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold mb-4 text-black">Herramientas a Ingresar</h2>
+                <p className="text-sm text-gray-600">
+                  Contratista: <strong className="text-black">{nombre}</strong> ({cedula})
+                </p>
+
+                <div className="bg-gray-50 p-4 md:p-3 rounded">
+                  <label className="block text-base md:text-sm font-medium text-black mb-3 md:mb-2">
+                    Buscar en catálogo (o crear nueva)
+                  </label>
+                  <div className="flex flex-col md:flex-row gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={busqueda}
+                      onChange={(e) => handleBuscar(e.target.value)}
+                      placeholder="Ej: Taladro, Sierra, Nivel..."
+                      className="flex-1 px-4 py-3 md:py-2 md:px-3 border rounded text-base md:text-sm text-black"
+                      autoComplete="off"
+                      autoFocus
+                    />
+                    <div>
+                      <label className="block text-sm md:text-xs text-black mb-2 md:mb-1">Cantidad</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={cantidad}
+                        onChange={(e) => setCantidad(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full md:w-20 px-3 py-3 md:py-2 border rounded text-black text-center text-base md:text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {resultados.length > 0 && (
+                    <div className="border rounded max-h-72 md:max-h-64 overflow-y-auto mb-2">
+                      {resultados.map((h) => (
+                        <button
+                          key={h.id}
+                          type="button"
+                          onClick={() => agregarItem(h)}
+                          className="w-full text-left p-4 md:p-3 hover:bg-blue-50 border-b last:border-b-0 text-black"
+                        >
+                          <div className="font-medium text-base md:text-sm">{h.nombre}</div>
+                          <div className="text-sm md:text-xs text-gray-500">{h.descripcion}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {busqueda && resultados.length === 0 && !creando && (
+                    <div className="bg-blue-50 border border-blue-200 p-4 md:p-3 rounded mb-2">
+                      <p className="text-base md:text-sm text-gray-600 mb-3 md:mb-2">
+                        No se encontró "{busqueda}"
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreando(true);
+                          setNuevaNombre(busqueda);
+                        }}
+                        className="w-full px-4 py-3 md:py-2 md:px-3 bg-blue-600 text-white text-base md:text-sm font-medium rounded hover:bg-blue-700"
+                      >
+                        ➕ Crear nueva herramienta
+                      </button>
+                    </div>
+                  )}
+
+                  {creando && (
+                    <div className="bg-blue-50 border border-blue-200 p-4 md:p-3 rounded mb-2">
+                      <h4 className="font-semibold text-base md:text-sm mb-4 md:mb-3 text-black">Crear nueva herramienta</h4>
+                      <input
+                        type="text"
+                        value={nuevaNombre}
+                        onChange={(e) => setNuevaNombre(e.target.value)}
+                        placeholder="Nombre de herramienta"
+                        className="w-full px-4 py-3 md:py-2 md:px-3 border rounded mb-3 text-base md:text-sm text-black"
+                        autoComplete="off"
+                        autoFocus
+                      />
+                      <textarea
+                        value={nuevaDesc}
+                        onChange={(e) => setNuevaDesc(e.target.value)}
+                        placeholder="Descripción (opcional)"
+                        className="w-full px-4 py-3 md:py-2 md:px-3 border rounded mb-4 md:mb-3 text-base md:text-sm text-black"
+                        rows={2}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCrearRapido}
+                          className="flex-1 px-4 py-3 md:py-2 md:px-3 bg-green-600 text-white text-base md:text-sm font-medium rounded hover:bg-green-700"
+                        >
+                          ✓ Crear y agregar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCreando(false)}
+                          className="flex-1 px-4 py-3 md:py-2 md:px-3 bg-gray-400 text-white text-base md:text-sm font-medium rounded hover:bg-gray-500"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {items.length > 0 && (
+                  <div className="border-t pt-4 md:pt-3">
+                    <h3 className="font-semibold mb-4 md:mb-3 text-base md:text-lg text-black">
+                      Herramientas ingresadas ({items.length})
+                    </h3>
+                    <div className="space-y-3 md:space-y-2">
+                      {items.map((item, idx) => (
+                        <div
+                          key={item.herramienta.id}
+                          className="flex flex-col md:flex-row md:justify-between md:items-center bg-gray-50 p-4 md:p-3 rounded gap-3"
+                        >
+                          <div className="flex-1">
+                            <div className="font-medium text-base md:text-sm text-black">{item.herramienta.nombre}</div>
+                            <div className="text-sm md:text-xs text-gray-500">{item.herramienta.descripcion}</div>
+                          </div>
+                          <div className="flex gap-2 items-end">
+                            <div>
+                              <label className="block text-sm md:text-xs text-black mb-2 md:mb-1">Cantidad</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.cantidad}
+                                onChange={(e) => {
+                                  const newItems = [...items];
+                                  newItems[idx].cantidad = Math.max(1, parseInt(e.target.value) || 1);
+                                  setItems(newItems);
+                                }}
+                                className="w-20 md:w-16 px-3 py-2 md:py-1 border rounded text-black text-center text-base md:text-sm"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => eliminarItem(item.herramienta.id)}
+                              className="text-red-600 hover:text-red-800 text-xl"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-8 md:mt-6">
+              {paso === 2 && (
+                <button
+                  type="button"
+                  onClick={() => setPaso(1)}
+                  className="flex-1 px-4 py-4 md:py-3 bg-gray-300 text-gray-800 font-semibold rounded hover:bg-gray-400 text-base md:text-sm"
+                >
+                  ← Atrás
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={guardando}
+                className="flex-1 px-4 py-4 md:py-3 bg-blue-600 text-white font-semibold rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-base md:text-sm"
+              >
+                {guardando ? 'Guardando...' : paso === 1 ? 'Siguiente →' : '✓ Registrar Entrada'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}

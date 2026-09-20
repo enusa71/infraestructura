@@ -1,0 +1,32 @@
+const cargarActivas = async () => {
+  try {
+    const resActiva = await fetch('/api/historial/buscar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filtro: '', tipoFiltro: 'numero', estado: 'ACTIVA' }),
+    });
+    const dataActiva = await resActiva.json();
+    const resParcial = await fetch('/api/historial/buscar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filtro: '', tipoFiltro: 'numero', estado: 'PARCIAL' }),
+    });
+    const dataParcial = await resParcial.json();
+    if (dataActiva.success && dataParcial.success) {
+      let todas = [...(dataActiva.custodias || []), ...(dataParcial.custodias || [])];
+      todas = todas.filter(custodia => {
+        const cantidadSalidaTotal = (custodia.salidas || []).reduce((total: number, salida: any) => {
+          return total + ((salida.items || []).reduce((sum: number, item: any) => sum + item.cantidadSalida, 0));
+        }, 0);
+        const cantidadIngresada = (custodia.items || []).reduce((total: number, item: any) => total + item.cantidad, 0);
+        return cantidadSalidaTotal < cantidadIngresada;
+      });
+      console.log('📋 Custodias con pendientes:', todas.length);
+      setCustodias(todas);
+      return todas;
+    }
+  } catch (err) {
+    console.error('Error cargando custodias:', err);
+  }
+  return [];
+};
